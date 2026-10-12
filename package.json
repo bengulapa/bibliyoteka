@@ -1,0 +1,19 @@
+{
+  "name": "bookmark-manager",
+  "version": "0.1.0",
+  "description": "Local-first bookmark manager: import, dedupe, tag, check, export.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "bm": "./src/cli.ts"
+  },
+  "scripts": {
+    "bm": "node src/cli.ts",
+    "serve": "node src/cli.ts serve",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {}
+}
