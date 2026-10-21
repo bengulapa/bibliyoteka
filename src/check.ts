@@ -6,9 +6,19 @@
  */
 
 import type { DB } from './db.ts';
-import { PoliteFetcher, type PolitenessConfig } from './polite.ts';
-import { redactUrl } from './sensitive.ts';
-import { registrableDomain } from './normalize.ts';
+import { PoliteFetcher, type PolitenessConfig } from './core/polite.ts';
+import { redactUrl } from './core/sensitive.ts';
+import { registrableDomain } from './core/normalize.ts';
+
+export interface CheckProgress {
+  id: number;
+  url: string;
+  verdict: 'alive' | 'dead' | 'unknown' | 'skipped';
+  status: number | null;
+  note: string;
+  done: number;
+  total: number;
+}
 
 export interface CheckOptions {
   limit?: number;
@@ -16,7 +26,9 @@ export interface CheckOptions {
   recheckAfterDays?: number;
   deadAfterFailures?: number;
   politeness?: Partial<PolitenessConfig>;
-  onProgress?: (msg: string) => void;
+  onProgress?: (p: CheckProgress) => void;
+  /** Lets a caller abort a run early (e.g. the GUI client disconnected). */
+  shouldStop?: () => boolean;
 }
 
 export interface CheckSummary {
@@ -49,7 +61,9 @@ export async function runCheck(db: DB, opts: CheckOptions = {}): Promise<CheckSu
   if (!rows.length) return summary;
 
   const fetcher = new PoliteFetcher(opts.politeness);
-  const log = opts.onProgress ?? (() => {});
+  const report = opts.onProgress ?? (() => {});
+  const total = rows.length;
+  let done = 0;
 
   // Interleave domains so the per-domain delay is absorbed by other work
   // rather than serializing the whole run behind one busy host.
@@ -73,6 +87,7 @@ export async function runCheck(db: DB, opts: CheckOptions = {}): Promise<CheckSu
       const qIndex = cursor++;
       if (qIndex >= queues.length) return;
       for (const row of queues[qIndex]) {
+        if (opts.shouldStop?.()) return;
         const res = await fetcher.fetch(row.url);
 
         insCheck.run(row.id, res.verdict, res.status, res.finalUrl, res.note);
@@ -106,8 +121,17 @@ export async function runCheck(db: DB, opts: CheckOptions = {}): Promise<CheckSu
           ).run(row.id);
         }
 
-        log(`${res.verdict.padEnd(7)} ${res.status ?? '---'} ${redactUrl(row.url)}${res.note ? ` (${res.note})` : ''}`);
-      }
+        done++;
+        report({
+          id: row.id,
+          // Never emit a live secret, even to a local client.
+          url: redactUrl(row.url),
+          verdict: res.verdict,
+          status: res.status,
+          note: res.note,
+          done,
+          total,
+        });      }
     }
   };
 

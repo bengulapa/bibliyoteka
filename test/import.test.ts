@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseNetscapeHtml, toNetscapeHtml } from '../src/importers/netscape.ts';
-import { parseCsv, parseCsvBookmarks } from '../src/importers/csv.ts';
+import { parseNetscapeHtml, toNetscapeHtml } from '../src/core/importers/netscape.ts';
+import { parseCsv, parseCsvBookmarks } from '../src/core/importers/csv.ts';
 
 const CHROME_EXPORT = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">

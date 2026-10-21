@@ -16,8 +16,8 @@ import { join } from 'node:path';
 import { createDbAt, startRun } from '../src/db.ts';
 import { importBookmarks, queryBookmarks } from '../src/store.ts';
 import { runCheck } from '../src/check.ts';
-import { PoliteFetcher } from '../src/polite.ts';
-import type { RawBookmark } from '../src/importers/netscape.ts';
+import { PoliteFetcher } from '../src/core/polite.ts';
+import type { RawBookmark } from '../src/core/importers/netscape.ts';
 
 interface Hit {
   method: string;

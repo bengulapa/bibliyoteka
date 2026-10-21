@@ -7,14 +7,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { openDb, startRun, finishRun, getSetting, setSetting, DB_PATH } from './db.ts';
-import { parseNetscapeHtml } from './importers/netscape.ts';
-import { parseCsvBookmarks } from './importers/csv.ts';
+import { parseNetscapeHtml } from './core/importers/netscape.ts';
+import { parseCsvBookmarks } from './core/importers/csv.ts';
 import { importBookmarks, pendingDuplicates, mergeBookmarks, undoRun, queryBookmarks, allTags, tagsOf, archiveBookmark } from './store.ts';
 import { runCheck } from './check.ts';
 import { exportHtml, exportJson } from './export.ts';
 import { startServer } from './web/server.ts';
-import { redactUrl } from './sensitive.ts';
-import type { KeywordRule } from './tagging.ts';
+import { redactUrl } from './core/sensitive.ts';
+import type { KeywordRule } from './core/tagging.ts';
 
 const HELP = `
 bm — local-first bookmark manager
@@ -166,7 +166,8 @@ async function main() {
         includePrivate: !!values['include-private'],
         recheckAfterDays: Number(values['recheck-days'] ?? 30),
         politeness: values.fast ? { minDelayMs: 300, maxDelayMs: 900, globalConcurrency: 6 } : {},
-        onProgress: (m) => console.log('  ' + m),
+        onProgress: (p) =>
+          console.log(`  ${p.verdict.padEnd(7)} ${p.status ?? '---'} ${p.url}${p.note ? ` (${p.note})` : ''}`),
       });
       console.log(
         `\nChecked ${summary.checked}: ${summary.alive} alive, ${summary.dead} dead, ${summary.unknown} unknown/blocked, ${summary.skipped} skipped.`,

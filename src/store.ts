@@ -7,10 +7,10 @@
 
 import type { DB } from './db.ts';
 import { logUndo, reindexFts } from './db.ts';
-import { normalizeUrl, nearDuplicateKey } from './normalize.ts';
-import { assessUrl, hostMatchesList } from './sensitive.ts';
-import { autoTags, type KeywordRule } from './tagging.ts';
-import type { RawBookmark } from './importers/netscape.ts';
+import { normalizeUrl, nearDuplicateKey } from './core/normalize.ts';
+import { assessUrl, hostMatchesList } from './core/sensitive.ts';
+import { autoTags, type KeywordRule } from './core/tagging.ts';
+import type { RawBookmark } from './core/importers/netscape.ts';
 
 export interface BookmarkRow {
   id: number;

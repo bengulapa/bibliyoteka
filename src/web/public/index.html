@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookmarks</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🔖</text></svg>">
+</head>
+<body>
+
+<div id="toasts" class="toasts"></div>
+
+<header class="topbar">
+  <div class="brand">🔖 <span>Bookmarks</span></div>
+
+  <div class="search">
+    <input id="search" type="search" placeholder="Search title, URL, or description…" autocomplete="off">
+  </div>
+
+  <nav class="views">
+    <button class="nav on" data-view="library">Library</button>
+    <button class="nav" data-view="duplicates">Duplicates <span class="pill" id="pill-dupes" hidden>0</span></button>
+    <button class="nav" data-view="check">Link check</button>
+    <button class="nav" data-view="settings">Settings</button>
+  </nav>
+
+  <div class="spacer"></div>
+
+  <button id="btn-add" class="primary">Add</button>
+  <button id="btn-import">Import</button>
+  <div class="menu">
+    <button id="btn-export">Export ▾</button>
+    <div class="dropdown" id="export-menu" hidden>
+      <button data-format="html">Browser HTML</button>
+      <button data-format="json">JSON (full backup)</button>
+      <hr>
+      <label><input type="checkbox" id="export-private"> Include private</label>
+      <label><input type="checkbox" id="export-archived"> Include archived</label>
+    </div>
+  </div>
+  <button id="btn-undo" title="Undo the last run">Undo</button>
+</header>
+
+<main>
+  <aside>
+    <div class="stats" id="stats"></div>
+
+    <h3>Status</h3>
+    <div id="status-filters">
+      <button class="side on" data-status="">All</button>
+      <button class="side" data-status="alive">Alive</button>
+      <button class="side" data-status="dead">Dead</button>
+      <button class="side" data-status="unknown">Unknown / blocked</button>
+      <button class="side" data-status="unchecked">Unchecked</button>
+    </div>
+
+    <h3>Library</h3>
+    <button class="side" id="toggle-private">Show private</button>
+    <button class="side" id="toggle-archived">Show archived</button>
+
+    <h3>Tags <input id="tag-filter" placeholder="filter…" class="tiny"></h3>
+    <div id="tags"></div>
+  </aside>
+
+  <section class="content">
+
+    <!-- LIBRARY -->
+    <div class="view" id="view-library">
+      <div class="toolbar">
+        <label class="check"><input type="checkbox" id="select-all"> Select</label>
+        <span id="selection-count" class="muted">none selected</span>
+        <div class="bulk" id="bulk" hidden>
+          <input id="bulk-tag" placeholder="tag selected…" class="tiny">
+          <button id="bulk-tag-add">Add tag</button>
+          <button id="bulk-private">Mark private</button>
+          <button id="bulk-archive" class="danger">Archive</button>
+        </div>
+        <div class="spacer"></div>
+        <label class="muted">Sort
+          <select id="sort">
+            <option value="added">Date added</option>
+            <option value="title">Title</option>
+            <option value="url">URL</option>
+            <option value="checked">Last checked</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="active-filters" class="chips"></div>
+      <div id="list" class="list"></div>
+      <div id="pager" class="pager"></div>
+    </div>
+
+    <!-- DUPLICATES -->
+    <div class="view" id="view-duplicates" hidden>
+      <p class="lede">
+        Same page, different query string. These are <strong>not</strong> merged automatically —
+        <code>?id=1001</code> and <code>?id=1002</code> are usually different pages.
+      </p>
+      <div id="dupes"></div>
+    </div>
+
+    <!-- LINK CHECK -->
+    <div class="view" id="view-check" hidden>
+      <p class="lede">
+        Checks run slowly on purpose: one request per domain every 5–10s, a real browser
+        User-Agent, and <code>robots.txt</code> respected. Blocked links (403 / 429 / Cloudflare)
+        are recorded as <em>unknown</em>, never dead. Nothing is ever deleted.
+      </p>
+
+      <div class="panel">
+        <div class="row">
+          <label>Check at most <input type="number" id="check-limit" value="50" min="1" max="5000" class="tiny"></label>
+          <label class="check"><input type="checkbox" id="check-private"> Include private bookmarks</label>
+          <label class="check"><input type="checkbox" id="check-force"> Re-check everything (ignore the 30-day window)</label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="check-fast"> Fast mode — only for sites you control</label>
+        </div>
+        <div class="row">
+          <button id="check-start" class="primary">Start check</button>
+          <button id="check-stop" hidden class="danger">Stop</button>
+          <span id="check-eta" class="muted"></span>
+        </div>
+        <div class="progress" id="check-progress" hidden><div id="check-bar"></div></div>
+        <div id="check-log" class="log" hidden></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="view-settings" hidden>
+      <div class="panel">
+        <h2>Auto-tag rules</h2>
+        <p class="muted">Deterministic only — no AI, no network calls. Wrap in slashes for a regex.</p>
+        <div id="rules"></div>
+        <div class="row">
+          <input id="rule-match" placeholder='match, e.g. rust or /\b(k8s|kubernetes)\b/'>
+          <input id="rule-tag" placeholder="tag, e.g. lang/rust" class="tiny">
+          <button id="rule-add">Add rule</button>
+        </div>
+        <div class="row">
+          <button id="retag">Apply rules to existing bookmarks</button>
+          <span class="muted">Reviewable — adds tags only, and is undoable.</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Private domains</h2>
+        <p class="muted">
+          Everything on these domains is flagged private: hidden by default, never fetched by the
+          link checker, and excluded from exports unless you explicitly opt in.
+        </p>
+        <div id="private-domains"></div>
+        <div class="row">
+          <input id="pd-add" placeholder="internal.corp.example">
+          <button id="pd-save">Add domain</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>History</h2>
+        <p class="muted">Every run is logged and reversible. Nothing is ever hard-deleted.</p>
+        <div id="runs"></div>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<!-- IMPORT DIALOG -->
+<dialog id="import-dialog">
+  <h2>Import bookmarks</h2>
+  <div id="drop" class="drop">
+    <p><strong>Drop an export file here</strong></p>
+    <p class="muted">Netscape HTML (Chrome, Firefox, Edge, Safari) · CSV (Pocket, Instapaper, Raindrop) · JSON backup</p>
+    <input type="file" id="file" accept=".html,.htm,.csv,.json,text/html,text/csv,application/json">
+  </div>
+  <div id="import-preview" hidden></div>
+  <div class="row end">
+    <button id="import-cancel">Cancel</button>
+    <button id="import-confirm" class="primary" disabled>Import</button>
+  </div>
+</dialog>
+
+<!-- ADD DIALOG -->
+<dialog id="add-dialog">
+  <h2>Add a bookmark</h2>
+  <label>URL <input id="add-url" placeholder="https://example.com/article" autocomplete="off"></label>
+  <label>Title <input id="add-title" placeholder="optional"></label>
+  <label>Tags <input id="add-tags" placeholder="comma,separated,optional"></label>
+  <p id="add-warning" class="warn" hidden></p>
+  <div class="row end">
+    <button id="add-cancel">Cancel</button>
+    <button id="add-confirm" class="primary">Add bookmark</button>
+  </div>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

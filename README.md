@@ -1,154 +1,125 @@
-# bm — a local-first bookmark manager
+# Bookmark manager
 
-Imports browser and read-later exports, deduplicates them, organizes them with
-tags, and checks whether the links still work **without getting you treated as a
-bot** — all on your own machine, in one SQLite file.
+A local-first bookmark manager with a web GUI. Import your browser or read-later
+exports, deduplicate them, tag and organize them, and check which links still
+work — without getting your IP treated as a bot.
 
-Nothing is ever hard-deleted. Nothing is ever sent to a third party.
+Everything stays on your machine. No account, no cloud, no telemetry, and
+**zero runtime dependencies**.
 
-## Install
-
-Requires Node 24+ (uses built-in TypeScript execution and `node:sqlite`).
-There are **no dependencies** and no build step.
-
-```sh
-git clone <this repo> && cd bookmark-manager
-node src/cli.ts --help
+```bash
+npm start           # open http://localhost:7777
 ```
 
-Your data lives in `~/.bookmarks/db.sqlite`. Override with `BM_HOME`.
+Requires Node 24+ (it runs the TypeScript sources directly — there is no build step).
 
-## The round trip
+## What it does
 
-```sh
-bm import bookmarks.html --source chrome   # Chrome/Firefox/Edge/Safari export
-bm dedupe                                  # review near-duplicates
-bm serve                                   # browse + tag at localhost:7777
-bm check                                   # verify links, slowly and politely
-bm export backup.html                      # re-imports into any browser
-bm export backup.json                      # lossless: tags, notes, check history
-```
+**Import** — Netscape bookmark HTML (Chrome, Firefox, Edge, Safari) and CSV
+exports from read-later services (Pocket, Instapaper, Raindrop), plus its own
+JSON backups. Drag a file onto the import dialog and you get a preview of what
+will happen *before* anything is written.
 
-Every destructive command prints an undo handle:
+**Deduplicate** — URLs are normalized (case, default ports, tracking params like
+`utm_*` and `fbclid`, fragments, trailing slashes) before comparison. Exact
+matches after normalization are merged automatically, keeping the earliest date
+and the union of tags and folders. Near-duplicates — same page, different query
+string — are **never** merged automatically; `?id=1001` and `?id=1002` are
+usually different products. Those go to a review queue.
 
-```sh
-bm undo 7      # reverse run #7 completely
-bm runs        # see what has happened
-```
+**Organize** — Tags are the primary axis. Browser folders are imported as tags
+(`folder:dev/rust`) *and* preserved verbatim so exports round-trip back into a
+browser. Auto-tagging is deterministic only — `site:`, `src:`, `folder:`, plus
+your own keyword rules. No AI, no network calls to classify anything.
 
-## Importing
+**Check links politely** — This is the part most tools get wrong:
 
-| Format | Covers |
-|---|---|
-| Netscape bookmark HTML | Chrome, Firefox, Edge, Safari, Raindrop, most read-later services |
-| CSV | Pocket, Instapaper, Omnivore, anything with a URL column |
-
-Columns are auto-detected. Override them when a file is unusual:
-
-```sh
-bm import pocket.csv --map url=Link,title=Name,tags=Labels
-bm import anything.html --dry-run      # parse and report, write nothing
-```
-
-Browser folders become tags (`folder:dev/rust`) *and* are preserved verbatim, so
-an export rebuilds your original folder tree.
-
-## Deduplication
-
-A URL is normalized before comparison: lowercase scheme and host, default ports
-dropped, `utm_*`/`fbclid`/other trackers stripped, fragments removed (except SPA
-`#!` routes), trailing slash dropped.
-
-- **Exact match after normalization** → merged automatically. The earliest
-  `added` date wins; tags and folders are unioned.
-- **Same page, different query string** → *flagged for review*, never merged.
-  Those are often genuinely different pages (`?id=1001` vs `?id=1002`).
-
-Review them in the UI or with `bm dedupe`.
-
-## Link checking without getting blocked
-
-The default profile is deliberately slow. A bookmark archive has no deadline,
-and the failure mode of going fast is a blocked IP.
-
-- A real browser User-Agent and matching headers
-- One request per domain every 5–10s, jittered; 4 domains in parallel
+- a real browser User-Agent, not a scraper string
+- one request per domain every 5–10 seconds, jittered, ~4 domains in parallel
+- `robots.txt` and `Retry-After` are honored
 - `HEAD` first, falling back to `GET` when a server rejects it
-- `robots.txt` and `Retry-After` honored
-- Two retries with exponential backoff
-- Anything verified in the last 30 days is skipped — runs are incremental and resumable
+- incremental and resumable; nothing is re-checked within 30 days
+- full status *history* per bookmark, not a single boolean
 
-**Blocked is not dead.** A 403, a 429, a Cloudflare challenge or a TLS
-interception are all recorded as `unknown`, never `dead`. A link is only called
-dead after repeated genuine 404/410/DNS failures — and even then it is flagged
-in a review queue with a Wayback Machine link, never removed.
+Crucially, **403 / 429 / Cloudflare challenges / TLS errors are recorded as
+`unknown`, never as `dead`.** Being blocked is not evidence a page is gone. A
+link is only marked dead after repeated genuine 404/410/DNS failures, and even
+then it is flagged for review with a Wayback Machine link — never removed.
 
-```sh
-bm check --limit 50          # check at most 50 due links
-bm check --recheck-days 0    # force a full re-check
+**Handle sensitive URLs** — Password-reset links, signed URLs, session tokens,
+`localhost`/RFC1918 addresses and URLs with embedded credentials are detected on
+import and flagged private. Private bookmarks are hidden from default views and
+search, excluded from exports unless you explicitly opt in, never fetched by the
+link checker, and redacted in logs and in the UI. You can also mark whole
+domains private in Settings.
+
+**Nothing is ever deleted.** "Archive" soft-hides. Every operation is recorded
+as a run and can be undone from the toast or from Settings → History.
+
+**Export** — Netscape HTML (rebuilds the folder tree, re-importable into any
+browser) or JSON for a lossless backup.
+
+## Architecture
+
+Three layers, so this can become a browser extension or desktop app without a
+rewrite:
+
+| Layer | Path | Depends on |
+|---|---|---|
+| Core logic | `src/core/` | nothing — plain TypeScript and standard `fetch` |
+| JSON API | `src/api.ts` | core + a storage handle |
+| Shell | `src/web/` | Node HTTP + SQLite |
+
+`src/core/` holds parsing, URL normalization, dedupe rules, sensitivity
+detection, tagging, and the polite fetcher. It runs anywhere JavaScript runs.
+
+`src/api.ts` is transport-agnostic: it takes `{method, path, query, body}` and
+returns `{status, body, download?}`. The web server mounts it over HTTP; an
+extension background worker or a desktop shell can call `handle()` in-process
+instead, with no logic changes.
+
+The frontend (`src/web/public/`) is vanilla HTML/CSS/JS — no framework, no
+bundler, no build step.
+
+> **Not yet abstracted:** `api.ts` takes a Node `node:sqlite` handle directly. A
+> browser-only build would need an IndexedDB adapter behind a shared store
+> interface. That is the single remaining blocker for the extension target.
+
+## CLI
+
+The GUI is the primary interface and can do everything. The CLI is kept for
+scripting and automation:
+
+```bash
+npm run bm -- import bookmarks.html
+npm run bm -- check --limit 100
+npm run bm -- export bookmarks.html
+npm run bm -- undo
 ```
 
-## Sensitive URLs
+Run `npm run bm -- --help` for the full list.
 
-Bookmarks are flagged private automatically when the URL contains credentials in
-the query string, embedded userinfo, or a private/internal host. You can also
-mark any bookmark, or a whole domain, private yourself:
+## Storage
 
-```sh
-bm private-domain add internal.corp.example
-```
+A single SQLite file at `~/.bookmarks/db.sqlite`. Override the location with
+`BM_HOME`. Back it up by copying the file, or by exporting JSON.
 
-Private bookmarks are:
-
-- hidden from the default list, search results and tag counts
-- **never fetched** by the link checker unless you pass `--include-private`
-- **excluded from every export** unless you pass `--include-private`
-- redacted in logs — and redacted even in an opt-in HTML export, so a live
-  token never lands in a file you hand to a browser
-
-At rest, protection is the `private` flag plus filesystem permissions.
-Full-database encryption is deliberately not implemented yet.
-
-## Organizing
-
-Tags are the primary axis — many-to-many, hierarchical by naming (`lang/rust`).
-Automatic tagging is deterministic only: no LLM, no network calls.
-
-- `site:github.com` from the domain
-- `src:chrome` from the import
-- `folder:dev/rust` from browser folders
-- your own keyword rules:
-
-```sh
-bm rules add "rust" lang/rust
-bm rules add "/\b(k8s|kubernetes)\b/" infra/k8s     # regex also works
-```
-
-## CLI vs UI
-
-Destructive and batch work lives in the CLI, where it is scriptable, logged and
-undoable. The web UI is for reading and curating: browse, search, filter by tag
-or link status, tag, mark private, archive, and resolve duplicates.
+Data at rest is protected by filesystem permissions and the `private` flag;
+full-database encryption is deliberately out of scope for now.
 
 The server binds to `127.0.0.1` only.
 
+## Planned
+
+Article text extraction to markdown with YAML front-matter. The schema already
+reserves `article_text`, `extracted_at`, and `extraction_status`, and it will
+reuse the same polite fetch layer — so it lands as a feature, not a migration.
+
 ## Tests
 
-```sh
-node --test test/
+```bash
+npm test
 ```
 
-Covers URL normalization, dedupe and merge semantics, both importers, HTML
-round-tripping, sensitive-URL detection and redaction, undo, and the link
-checker end to end against a local HTTP server (HEAD→GET fallback, robots,
-`Retry-After` backoff, per-domain rate limiting, and the blocked-is-not-dead
-guarantee).
-
-## Not built yet
-
-Article extraction to markdown is designed but unimplemented. The schema already
-reserves `article_text`, so it lands as a feature rather than a migration: it
-will reuse the same polite fetch layer and export one `.md` per article with
-YAML front-matter.
-
-Also out of scope for now: browser extension, sync, multi-user, encryption.
+Covers URL normalization, dedupe semantics, importers, the privacy guarantees,
+undo, the full API route table, and an end-to-end run through the HTTP server.

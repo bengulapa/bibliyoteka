@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeUrl, nearDuplicateKey, registrableDomain } from '../src/normalize.ts';
+import { normalizeUrl, nearDuplicateKey, registrableDomain } from '../src/core/normalize.ts';
 
 test('lowercases scheme and host', () => {
   assert.equal(normalizeUrl('HTTPS://Example.COM/Path'), 'https://example.com/Path');

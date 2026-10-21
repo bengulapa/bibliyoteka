@@ -5,9 +5,9 @@
  */
 
 import type { DB } from './db.ts';
-import { toNetscapeHtml, type RawBookmark } from './importers/netscape.ts';
+import { toNetscapeHtml, type RawBookmark } from './core/importers/netscape.ts';
 import { tagsOf, type BookmarkRow } from './store.ts';
-import { redactUrl } from './sensitive.ts';
+import { redactUrl } from './core/sensitive.ts';
 
 export interface ExportOpts {
   includePrivate?: boolean;

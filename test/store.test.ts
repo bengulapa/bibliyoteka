@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { createDbAt, startRun, finishRun } from '../src/db.ts';
 import { importBookmarks, pendingDuplicates, mergeBookmarks, undoRun, queryBookmarks, tagsOf } from '../src/store.ts';
 import { exportHtml, exportJson } from '../src/export.ts';
-import { assessUrl, redactUrl } from '../src/sensitive.ts';
-import type { RawBookmark } from '../src/importers/netscape.ts';
+import { assessUrl, redactUrl } from '../src/core/sensitive.ts';
+import type { RawBookmark } from '../src/core/importers/netscape.ts';
 
 function freshDb() {
   const dir = mkdtempSync(join(tmpdir(), 'bm-test-'));
