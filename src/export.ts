@@ -60,7 +60,7 @@ export function exportJson(db: DB, opts: ExportOpts = {}): string {
   }));
 
   return JSON.stringify(
-    { format: 'bookmark-manager/v1', exportedAt: new Date().toISOString(), count: out.length, bookmarks: out },
+    { format: 'bibliyoteka/v1', exportedAt: new Date().toISOString(), count: out.length, bookmarks: out },
     null,
     2,
   );

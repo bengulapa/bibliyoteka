@@ -17,7 +17,7 @@ import { redactUrl } from './core/sensitive.ts';
 import type { KeywordRule } from './core/tagging.ts';
 
 const HELP = `
-bm — local-first bookmark manager
+bm — Bibliyoteka, a local-first bookmark manager
 
   bm import <file>        Import bookmarks (.html Netscape export, or .csv)
       --source <name>     Label the import (default: inferred from filename)
@@ -293,7 +293,7 @@ async function main() {
     case 'serve': {
       const port = Number(values.port ?? 7777);
       await startServer(db, port);
-      console.log(`Bookmark UI running at http://localhost:${port}`);
+      console.log(`Bibliyoteka UI running at http://localhost:${port}`);
       console.log('Private bookmarks are hidden by default. Ctrl+C to stop.');
       return; // keep the process alive
     }

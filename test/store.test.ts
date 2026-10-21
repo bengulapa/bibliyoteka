@@ -171,7 +171,7 @@ test('JSON export is lossless for tags and check state', () => {
   importBookmarks(db, [bm('https://e.com/a', 'Title', 'Dev/Tools')], { source: 'chrome', runId });
 
   const parsed = JSON.parse(exportJson(db, {}));
-  assert.equal(parsed.format, 'bookmark-manager/v1');
+  assert.equal(parsed.format, 'bibliyoteka/v1');
   assert.equal(parsed.bookmarks.length, 1);
 
   const b = parsed.bookmarks[0];

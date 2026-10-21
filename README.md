@@ -1,4 +1,4 @@
-# Bookmark manager
+# Bibliyoteka
 
 A local-first bookmark manager with a web GUI. Import your browser or read-later
 exports, deduplicate them, tag and organize them, and check which links still

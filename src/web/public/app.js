@@ -1,5 +1,5 @@
 /**
- * Bookmark manager UI. Vanilla ES modules — no framework, no build step.
+ * Bibliyoteka UI. Vanilla ES modules — no framework, no build step.
  * All state changes go through the JSON API in ../api.ts.
  */
 

@@ -1,7 +1,7 @@
 {
-  "name": "bookmark-manager",
+  "name": "bibliyoteka",
   "version": "0.1.0",
-  "description": "Local-first bookmark manager with a GUI: import, dedupe, tag, check, export.",
+  "description": "Bibliyoteka — a local-first bookmark manager with a GUI: import, dedupe, tag, check, export.",
   "type": "module",
   "private": true,
   "bin": {
