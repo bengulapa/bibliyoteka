@@ -19,6 +19,12 @@ export interface PolitenessConfig {
   timeoutMs: number;
   maxRetries: number;
   respectRobots: boolean;
+  /**
+   * Skip certificate verification. Off by default — only for users who
+   * explicitly opt in, e.g. behind a corporate TLS-inspecting proxy whose
+   * root CA isn't in Node's trust store. Weakens the integrity of this run.
+   */
+  insecureTLS: boolean;
 }
 
 export const DEFAULT_POLITENESS: PolitenessConfig = {
@@ -32,6 +38,7 @@ export const DEFAULT_POLITENESS: PolitenessConfig = {
   timeoutMs: 20_000,
   maxRetries: 2,
   respectRobots: true,
+  insecureTLS: false,
 };
 
 const BROWSER_HEADERS = {
@@ -46,6 +53,23 @@ const BROWSER_HEADERS = {
 };
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Node's global `fetch` consults `NODE_TLS_REJECT_UNAUTHORIZED` at connect
+ * time, so toggling it around a call scopes the relaxed verification to
+ * that call only (and restores the prior value, even if unset).
+ */
+async function withTLSMode<T>(insecure: boolean, fn: () => Promise<T>): Promise<T> {
+  if (!insecure) return fn();
+  const prev = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prev;
+  }
+}
 
 function jitter(cfg: PolitenessConfig): number {
   return cfg.minDelayMs + Math.random() * Math.max(0, cfg.maxDelayMs - cfg.minDelayMs);
@@ -166,14 +190,19 @@ export class PoliteFetcher {
     const s = this.state(domain);
     if (s.robots !== undefined) return s.robots;
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), this.cfg.timeoutMs);
-      const res = await fetch(`${origin}/robots.txt`, {
-        headers: { 'User-Agent': this.cfg.userAgent, ...BROWSER_HEADERS },
-        signal: ctrl.signal,
-        redirect: 'follow',
+      const res = await withTLSMode(this.cfg.insecureTLS, async () => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), this.cfg.timeoutMs);
+        try {
+          return await fetch(`${origin}/robots.txt`, {
+            headers: { 'User-Agent': this.cfg.userAgent, ...BROWSER_HEADERS },
+            signal: ctrl.signal,
+            redirect: 'follow',
+          });
+        } finally {
+          clearTimeout(timer);
+        }
       });
-      clearTimeout(timer);
       s.robots = res.ok ? parseRobots(await res.text(), this.cfg.userAgent) : null;
     } catch {
       s.robots = null; // no robots.txt reachable: proceed, politely
@@ -221,15 +250,20 @@ export class PoliteFetcher {
         if (attempt > 0) await sleep(1000 * 2 ** attempt + Math.random() * 500);
 
         try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), this.cfg.timeoutMs);
-          const res = await fetch(url.toString(), {
-            method,
-            headers: { 'User-Agent': this.cfg.userAgent, ...BROWSER_HEADERS },
-            redirect: 'follow',
-            signal: ctrl.signal,
+          const res = await withTLSMode(this.cfg.insecureTLS, async () => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), this.cfg.timeoutMs);
+            try {
+              return await fetch(url.toString(), {
+                method,
+                headers: { 'User-Agent': this.cfg.userAgent, ...BROWSER_HEADERS },
+                redirect: 'follow',
+                signal: ctrl.signal,
+              });
+            } finally {
+              clearTimeout(timer);
+            }
           });
-          clearTimeout(timer);
 
           // Many servers reject HEAD; that is not a dead link.
           if ((res.status === 405 || res.status === 501) && method === 'HEAD') {

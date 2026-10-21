@@ -119,12 +119,18 @@
           <label class="check"><input type="checkbox" id="check-fast"> Fast mode — only for sites you control</label>
         </div>
         <div class="row">
+          <label class="check" title="Only for sites behind a corporate TLS-inspecting proxy/firewall. Weakens certificate verification for this run.">
+            <input type="checkbox" id="check-insecure-tls"> Ignore certificate errors (corporate networks)
+          </label>
+        </div>
+        <div class="row">
           <button id="check-start" class="primary">Start check</button>
           <button id="check-stop" hidden class="danger">Stop</button>
           <span id="check-eta" class="muted"></span>
         </div>
         <div class="progress" id="check-progress" hidden><div id="check-bar"></div></div>
         <div id="check-log" class="log" hidden></div>
+        <div id="check-summary" class="check-summary" hidden></div>
       </div>
     </div>
 

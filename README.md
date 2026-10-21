@@ -46,6 +46,22 @@ Crucially, **403 / 429 / Cloudflare challenges / TLS errors are recorded as
 link is only marked dead after repeated genuine 404/410/DNS failures, and even
 then it is flagged for review with a Wayback Machine link — never removed.
 
+A TLS error such as `tls-error:SELF_SIGNED_CERT_IN_CHAIN` almost always means
+you're on a network with a TLS-inspecting proxy/firewall (common on corporate
+networks), whose root CA isn't in Node's trust store — not that the site is
+broken. Two ways to fix it:
+
+- **Trust your corporate CA (recommended):** set `NODE_EXTRA_CA_CERTS` to the
+  path of your org's root CA `.pem` file before running `bm serve`, so checks
+  verify certificates properly instead of just giving up.
+- **"Ignore certificate errors" checkbox** on the Link check screen: an
+  explicit opt-in that skips certificate verification for that run only. Only
+  use it on networks you trust — it weakens the integrity of the check.
+
+After a run finishes, the Link check screen shows a persistent summary
+(checked/alive/dead/unknown/skipped counts, plus any links that returned a
+404/410) — it doesn't rely on a toast you might miss.
+
 **Handle sensitive URLs** — Password-reset links, signed URLs, session tokens,
 `localhost`/RFC1918 addresses and URLs with embedded credentials are detected on
 import and flagged private. Private bookmarks are hidden from default views and

@@ -39,7 +39,7 @@ function el(tag, attrs = {}, ...kids) {
   return node;
 }
 
-function toast(message, { error = false, undo = false } = {}) {
+function toast(message, { error = false, undo = false, duration } = {}) {
   const box = el('div', { class: `toast${error ? ' err' : ''}` }, message);
   if (undo) {
     box.append(
@@ -55,7 +55,7 @@ function toast(message, { error = false, undo = false } = {}) {
     );
   }
   $('#toasts').append(box);
-  setTimeout(() => box.remove(), undo ? 12000 : 5000);
+  setTimeout(() => box.remove(), duration ?? (undo ? 12000 : 5000));
 }
 
 async function api(method, path, body) {
@@ -348,20 +348,28 @@ async function loadDuplicates() {
 // --------------------------------------------------------------- link check
 
 let checkStream = null;
+let checkDeadLinks = [];
+let checkStartedAt = 0;
 
 function startCheck() {
   const p = new URLSearchParams({ limit: $('#check-limit').value || '50' });
   if ($('#check-private').checked) p.set('private', '1');
   if ($('#check-force').checked) p.set('recheckDays', '0');
   if ($('#check-fast').checked) p.set('fast', '1');
+  if ($('#check-insecure-tls').checked) p.set('insecureTLS', '1');
 
   const log = $('#check-log');
   log.replaceChildren();
   log.hidden = false;
   $('#check-progress').hidden = false;
+  $('#check-progress').classList.remove('done');
   $('#check-bar').style.width = '0%';
   $('#check-start').hidden = true;
   $('#check-stop').hidden = false;
+  $('#check-summary').hidden = true;
+  $('#check-summary').replaceChildren();
+  checkDeadLinks = [];
+  checkStartedAt = Date.now();
 
   checkStream = new EventSource(`/api/check/stream?${p}`);
 
@@ -378,11 +386,13 @@ function startCheck() {
     const p = JSON.parse(e.data);
     $('#check-bar').style.width = `${Math.round((p.done / Math.max(p.total, 1)) * 100)}%`;
     log.prepend(el('div', { class: p.verdict }, `${p.verdict.padEnd(8)} ${p.status ?? '---'}  ${p.url}${p.note ? `  (${p.note})` : ''}`));
+    if (p.verdict === 'dead') checkDeadLinks.push(p.url);
   });
 
   checkStream.addEventListener('done', (e) => {
     const { summary } = JSON.parse(e.data);
-    toast(`Check finished — ${summary.alive} alive, ${summary.dead} dead, ${summary.unknown} unknown.`);
+    showCheckSummary(summary);
+    toast(`Check finished — ${summary.alive} alive, ${summary.dead} dead, ${summary.unknown} unknown.`, { duration: 8000 });
     stopCheck();
     refreshAll();
   });
@@ -391,6 +401,50 @@ function startCheck() {
     // EventSource fires this on normal stream close too, so only warn mid-run.
     if (checkStream && checkStream.readyState === EventSource.CLOSED) stopCheck();
   });
+}
+
+function showCheckSummary(summary) {
+  const box = $('#check-summary');
+  const secs = Math.max(1, Math.round((Date.now() - checkStartedAt) / 1000));
+  const mins = Math.floor(secs / 60);
+  const dur = mins ? `${mins}m ${secs % 60}s` : `${secs}s`;
+
+  $('#check-progress').classList.add('done');
+  $('#check-eta').textContent = `Done — finished at ${new Date().toLocaleTimeString()} (took ${dur}).`;
+
+  box.hidden = false;
+  box.append(
+    el(
+      'div',
+      { class: 'summary-headline' },
+      `✓ Check complete: ${summary.checked} checked, ${summary.alive} alive, ${summary.dead} dead, ${summary.unknown} unknown, ${summary.skipped} skipped.`,
+    ),
+  );
+  if (summary.unknown > 0) {
+    box.append(
+      el(
+        'div',
+        { class: 'muted small' },
+        '"Unknown" means the link was blocked, rate-limited, or hit a certificate error — common behind corporate ' +
+          'firewalls/proxies — not confirmed dead. See the log above for details, or try "Ignore certificate ' +
+          'errors" if the note says tls-error.',
+      ),
+    );
+  }
+  if (checkDeadLinks.length) {
+    box.append(
+      el(
+        'div',
+        { class: 'summary-dead-title' },
+        `Returned 404/410 this run (${checkDeadLinks.length}) — marked dead after ${3} consecutive failed checks:`,
+      ),
+      el(
+        'ul',
+        { class: 'summary-dead-list' },
+        ...checkDeadLinks.slice(0, 25).map((u) => el('li', {}, u)),
+      ),
+    );
+  }
 }
 
 function stopCheck() {

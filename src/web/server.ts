@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { DB } from '../db.ts';
 import { handle, streamCheck, type ApiRequest } from '../api.ts';
+import type { PolitenessConfig } from '../core/polite.ts';
 
 const PUBLIC_DIR = fileURLToPath(new URL('./public/', import.meta.url));
 
@@ -73,16 +74,19 @@ export function createApp(db: DB): Server {
         });
 
         try {
+          const politeness: Partial<PolitenessConfig> =
+            url.searchParams.get('fast') === '1'
+              ? { minDelayMs: 300, maxDelayMs: 900, globalConcurrency: 6 }
+              : {};
+          if (url.searchParams.get('insecureTLS') === '1') politeness.insecureTLS = true;
+
           await streamCheck(
             db,
             {
               limit: Number(url.searchParams.get('limit') ?? 200),
               includePrivate: url.searchParams.get('private') === '1',
               recheckAfterDays: Number(url.searchParams.get('recheckDays') ?? 30),
-              politeness:
-                url.searchParams.get('fast') === '1'
-                  ? { minDelayMs: 300, maxDelayMs: 900, globalConcurrency: 6 }
-                  : {},
+              politeness,
               shouldStop: () => cancelled,
             },
             emit,
